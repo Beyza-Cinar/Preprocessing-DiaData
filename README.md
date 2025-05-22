@@ -15,4 +15,4 @@ The code is organized as follows:
 
 - data_cleaning.ipynb: Contains the code to clean the data
 - data_pre-processing_MB.ipynb: Contains the code for pre-processing and model training on the maindabase of DiaData including all subjects. 
-- data_pre-processing_SBII.ipynb: Contains the code for pre-processing and model training on Subdatabase II of DiaData including only glucose and heart rate data. 
+- data_pre-processing_SBII.ipynb: Contains the code for pre-processing and model training on Subdatabase II of DiaData including only subjects with available glucose and heart rate data. 
