@@ -27,8 +27,8 @@ TensorFlow version 2.13.0
 
 The code is organized as follows:
 
-- data_integration.py = Contains data intergation steps since data is integrated again because missing values produced via undersampling are not treated with feedforward filling in this study.
-- data_preprocessing.py = Contains the functions for preprocessing the dataset for an improved quality and the benchmarking task.
+- data_integration.py: Contains data intergation steps since data is integrated again because missing values produced via undersampling are not treated with feedforward filling in this study.
+- data_preprocessing.py: Contains the functions for preprocessing the dataset for an improved quality and the benchmarking task.
 - data_pre-processing_MDB.ipynb: Contains the code for pre-processing and model training on the maindabase of DiaData including all subjects.
 - data_pre-processing_MDB_raw.ipynb: Contains the code for pre-processing and model training on the raw maindabase of DiaData including all subjects.
 - data_cleaning_SBI.ipynb: Contains the code for data cleaning on Subdatabase I of DiaData including only subjects with available glucose values and demographics.
