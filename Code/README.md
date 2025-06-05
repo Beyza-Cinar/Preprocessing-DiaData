@@ -1,23 +1,3 @@
-# DiaData: An Integrated Large Dataset for Type 1 Diabetes and Hypoglycemia Research
-
-This project presents DiaData, an integrated dataset that combines Continuous Glucose Monitoring (CGM) measurements from 15 different datasets, all collected from patients with Type 1 Diabetes. The datasets used in this study were obtained from a variety of third-party sources. Due to licensing restrictions, we are unable to redistribute the full integrated dataset. However, this repository provides:
-
-- A detailed description of the code and functions used to retrieve and process data from each individual dataset.
-- Access to a partial version of the integrated dataset, containing 13 out of the 15 datasets. The data can be found in https://www.kaggle.com/datasets/beyzacinar22/diadata.
-
-## Requirements
-
-python version 3.11.4
-
-matplotlib version 3.7.2
-
-pandas version 2.0.3
-
-numpy version 1.24.3
-
-polars version 1.27.1
-
-
 ## Summary of Used Datasets 
 
 | Dataset                                                      | CGM Frequency | Subject Counts | Availability |
@@ -84,13 +64,3 @@ polars version 1.27.1
 15. **ShanghaiT1D**: Zhu, Jinhao (2022). Diabetes Datasets-ShanghaiT1DM and ShanghaiT2DM. figshare. Dataset. https://doi.org/10.6084/m9.figshare.20444397.v3
     
 17. **T1GDUJA**: Gaitán Guerrero, J. F., López Ruiz, J. L., Martínez Cruz, C., & Espinilla Estévez, M. (2024). T1GDUJA: Glucose dataset of a patient with type 1 diabetes mellitus [Data set]. In IEEE Internet of Things Journal. Zenodo. https://doi.org/10.5281/zenodo.11284018
-
-
-
-## Code Organization
-
-The code is organized as follows: 
-
-- datasets for T1D.zip: Contains the integrated dataset. If restricted datasets are downloaded, they should be stored in this folder under datasets for T1D/granada or datasets for T1D/DiaTrend. The integrated dataset can be downloaded from https://www.kaggle.com/datasets/beyzacinar22/diadata,
-- data_intergation.py: Contains the functions to read and integrate the single datasets. If necessary, the paths to the datasets should be changed here. 
-- Data_Exploration.ipynb: Contains example code to read the required funtions. Provides statistical analysis of the dataset.
