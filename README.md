@@ -1,4 +1,4 @@
-# Pre-processing_DiaData
+# Preprocessing-DiaData
 
 This repository presents data cleaning, and pre-processing steps of DiaData, a large integrated CGM Dataset of subjects with Type 1 Diabetes presented in: https://github.com/Beyza-Cinar/DiaData.
 
