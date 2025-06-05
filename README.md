@@ -1,6 +1,6 @@
 # Preprocessing-DiaData
 
-This repository presents data cleaning, and pre-processing steps of DiaData, a large integrated CGM Dataset of subjects with Type 1 Diabetes presented in: https://github.com/Beyza-Cinar/DiaData.
+This repository presents data cleaning, and pre-processing steps of DiaData, a large integrated CGM Dataset of subjects with Type 1 Diabetes presented in: https://github.com/Beyza-Cinar/DiaData. Detailed instruction on acquiring the single datasets and restricted datasets is provided in https://github.com/Beyza-Cinar/DiaData as well.
 
 The steps include:
 1. Data cleaning with outlier detection using the interquartile range (IQR) method.
