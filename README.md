@@ -9,6 +9,20 @@ The steps include:
 4. Data analysis involving correlation analysis on a subset of DiaData including glucose and heart rate measurements.
 5. Benchmarking on DiaData with hypoglycemia classification up to 2 hours before onset.
 
+## Requirements
+
+python version 3.11.4
+
+matplotlib version 3.7.2
+
+pandas version 2.0.3
+
+numpy version 1.24.3
+
+polars version 1.27.1
+
+TensorFlow version 2.13.0
+
 ## Code Organization
 
 The code is organized as follows:
