@@ -2,16 +2,14 @@
 This file provides functions to read the seperate datasets, store them in a list and integrate them into three separate datasets.
 """
 
-
-# necessary imports
+# imports
 import pandas as pd
 import glob
 import os
 import csv
 import re
 
-#---------------- Functions reading and integrating data for version two of DiaData, where data with 15 min frequency was undersampled to 5 min with introducing missing values ----------------#
-
+#---------------- Functions reading and integrating data for version one of DiaData, where data with 15 min frequency was undersampled to 5 min using forward filling to mitigate missing values ----------------#
 
 def df_resample(df_org, timestamp, frequency, mode, fillid, value):
     """
@@ -32,7 +30,7 @@ def df_resample(df_org, timestamp, frequency, mode, fillid, value):
         df[timestamp] = df[timestamp].dt.round(frequency)
         # rounding can induce duplicates which need to be removed to enable resampling
         df = df.drop_duplicates(subset=[timestamp])
-        # remove nan values in the timestamp column 
+        # drops nan entries 
         df = df.dropna(subset=[timestamp])
         # the timestamps column is set to be the index 
         df = df.set_index(timestamp)
@@ -51,11 +49,11 @@ def df_resample(df_org, timestamp, frequency, mode, fillid, value):
         print("Mode can be either glucose or vitals")
     # finally, the column with the specified values is converted to numericals (floats)
     df[value] = pd.to_numeric(df[value], errors="coerce")
-    # the resampled dataframe is returned
+    # the reasmpled dataframe is returned
     return df
 
 
-def fill_gaps_sampling(df, timestamp, subject_id, glucose, fillmin=15, fillvalues = True):
+def fill_gaps_sampling(df, timestamp, subject_id, glucose, fillmin=15):
     """
     This function applies feedforward filling to glucose values missing as a result of undersampling.
     Parameters:
@@ -65,37 +63,33 @@ def fill_gaps_sampling(df, timestamp, subject_id, glucose, fillmin=15, fillvalue
     - glucose is the name of the column with the glucose measurements
     - fillmin is the original frequency of the dataset; by default it is set to 15 minutes
     """ 
-    if fillvalues == True:
-        # first, the timestamp column of the original dataframe is sorted and then copied
-        sorted_df = df.sort_values(timestamp).copy()
-        # continuous true glucose measurements are identified having a time difference of the dataset's original frequency
-        sorted_df["time_diff"] = sorted_df[timestamp].diff()
-        sorted_df["gap"] = sorted_df["time_diff"] > pd.Timedelta(minutes=fillmin)
-        # consecutive glucose measurements are grouped and assigned a group id 
-        sorted_df["group_id"] = sorted_df["gap"].cumsum()
+    # first, the timestamp column of the original dataframe is sorted and then copied
+    sorted_df = df.sort_values(timestamp).copy()
+    # continuous true glucose measurements are identified having a time difference of the dataset's original frequency
+    sorted_df["time_diff"] = sorted_df[timestamp].diff()
+    sorted_df["gap"] = sorted_df["time_diff"] > pd.Timedelta(minutes=fillmin)
+    # consecutive glucose measurements are grouped and assigned a group id 
+    sorted_df["group_id"] = sorted_df["gap"].cumsum()
 
-        # an empty list is intialized which will store individually resampled groups 
-        resampled_groups = []
+    # an empty list is intialized which will store individually resampled groups 
+    resampled_groups = []
 
-        # for each group of consecutive measurements, the timestamp is undersampled to 5 minutes and occuring gaps are filled with the fillforward method
-        for _, group in sorted_df.groupby("group_id"):
-            # to resample the group, the function "df_resample()" is called
-            group_resampled = df_resample(group, timestamp = timestamp, frequency= "5min", mode="glucose", fillid = subject_id, value = glucose)
-            group_resampled[glucose] = group_resampled[glucose].ffill()
-            # the resampled group without gaps is appended to the initialized list
-            resampled_groups.append(group_resampled)
+    # for each group of consecutive measurements, the timestamp is undersampled to 5 minutes and occuring gaps are filled with the fillforward method
+    for _, group in sorted_df.groupby("group_id"):
+        # to resample the group, the function "df_resample()" is called
+        group_resampled = df_resample(group, timestamp = timestamp, frequency= "5min", mode="glucose", fillid = subject_id, value = glucose)
+        group_resampled[glucose] = group_resampled[glucose].ffill()
+        # the resampled group without gaps is appended to the initialized list
+        resampled_groups.append(group_resampled)
 
-        # all groups are concatenated to one dataframe
-        resampled_df = pd.concat(resampled_groups)
-        # finally, the whole dataset is resampled to 5 minute intervals
-        resampled_df = df_resample(resampled_df, timestamp = timestamp, frequency= "5min", mode="glucose", fillid = subject_id, value = glucose)
-        # the resamoked dataset is returned
-        return resampled_df.reset_index()
-    else: 
-        sorted_df = df.sort_values(timestamp).copy()
-        resampled_df = df_resample(sorted_df, timestamp = timestamp, frequency= "5min", mode="glucose", fillid = subject_id, value = glucose)
-        # the resamoked dataset is returned
-        return resampled_df.reset_index()
+    # all groups are concatenated to one dataframe
+    resampled_df = pd.concat(resampled_groups)
+    # finally, the whole dataset is resampled to 5 minute intervals
+    resampled_df = df_resample(resampled_df, timestamp = timestamp, frequency= "5min", mode="glucose", fillid = subject_id, value = glucose)
+    # the resampled dataset is returned
+    return resampled_df.reset_index()
+
+
 
 def detect_best_separator(file_path, sample_size=10000):
     """ 
@@ -221,8 +215,8 @@ def read_data(read_all = True):
         # all datasets should keep the same format of date and time -> combine both and convert to datetime
         df_granada["ts"] = pd.to_datetime(df_granada["Measurement_date"] + " " + df_granada["Measurement_time"])
         # undersamples to 5 minute intervals to have unifrom sample rate; this is done for each subject seperately
-        df_granada = df_granada.groupby("PtID", group_keys=False).apply(lambda x: df_resample(x, timestamp = "ts", frequency= "5min", mode="glucose", fillid = "PtID", value = "GlucoseCGM"))                                                               
-        
+        df_granada = df_granada.groupby("PtID", group_keys=False).apply(lambda x: fill_gaps_sampling(x, "ts", "PtID", "GlucoseCGM"))
+
         # reads the dataframe with demographics
         df_granada_info = smart_read("datasets for T1D/granada/T1DiabetesGranada/Patient_info.csv")
         # converts timstamps to datetime
@@ -304,23 +298,6 @@ def read_data(read_all = True):
         # resamples to 5 minute intervals to have unifrom sample rate; this is done for each subject seperately
         df_city = df_city.groupby("PtID", group_keys=False).apply(lambda x: df_resample(x, timestamp = "ts", frequency= "5min", mode="glucose", fillid = "PtID", value = "GlucoseCGM"))
 
-        # reads dataframe including sex data
-        df_city_screen = smart_read("datasets for T1D/CITYPublicDataset/Data Tables/DiabScreening.txt")
-        # reduces the columns to only important columns
-        df_city_screen = df_city_screen[["PtID", "Sex"]]
-
-        # reads dataframe including age data
-        df_city_age = smart_read("datasets for T1D/CITYPublicDataset/Data Tables/PtRoster.txt")
-        # reduces the columns to only important columns
-        df_city_age = df_city_age[["PtID", "AgeAsOfEnrollDt"]]
-
-        # merges dataframes of sex and age 
-        df_city_info = pd.merge(df_city_screen, df_city_age, on=["PtID"], how="inner")
-
-        # merges dataframes of demorgaphics and CGM data
-        df_city = pd.merge(df_city, df_city_info, on=["PtID"], how="left")
-        # column names are renamed for semantic equality
-        df_city = df_city.rename(columns={"AgeAsOfEnrollDt": "Age"})
         # adds the database name to the patient ID to enable reidentification 
         df_city["PtID"] = df_city["PtID"].astype(str) + "_CITY"
         # adds a "Database" column with the name of the Dataset to enable reidentification
@@ -445,7 +422,7 @@ def read_data(read_all = True):
                                 # reduces the columns to only important columns
                                 hupa_glc = hupa_glc[["ts", "PtID", "GlucoseCGM"]]
                                 # resamples to 5 minute intervals to have unifrom sample rate
-                                hupa_glc = df_resample(hupa_glc, timestamp = "ts", frequency= "5min", mode="glucose", fillid = "PtID", value = "GlucoseCGM")                                                               
+                                hupa_glc = fill_gaps_sampling(hupa_glc, "ts", "PtID", "GlucoseCGM")
                                 
                                 # adds all glucose data into one list 
                                 all_data_GLC_h.append(hupa_glc)
@@ -468,8 +445,8 @@ def read_data(read_all = True):
                                 hupa_glc["GlucoseCGM"] = hupa_glc["Scan Glucose"].where(hupa_glc["Scan Glucose"].notna(), hupa_glc["Historic Glucose"])
                                 hupa_glc = hupa_glc[["ts", "PtID", "GlucoseCGM"]]
                                 # resamples to 5 minute intervals to have unifrom sample rate
-                                hupa_glc = df_resample(hupa_glc, timestamp = "ts", frequency= "5min", mode="glucose", fillid = "PtID", value = "GlucoseCGM")                                                            
-
+                                hupa_glc = fill_gaps_sampling(hupa_glc, "ts", "PtID", "GlucoseCGM")
+                                
                                 # adds the glucose file to a list of glucose files
                                 all_data_GLC_h.append(hupa_glc)
                             except Exception as e:
@@ -577,24 +554,6 @@ def read_data(read_all = True):
         # resamples to 5 minute intervals to have unifrom sample rate; this is done for each subject seperately
         df_RBG = df_RBG.groupby("PtID", group_keys=False).apply(lambda x: df_resample(x, timestamp = "ts", frequency= "5min", mode="glucose", fillid = "PtID", value = "GlucoseCGM"))
 
-        # reads dataframe with sex data
-        df_RBG_screen = smart_read("datasets for T1D/REPLACEBG/Data Tables/HScreening.txt")
-        # reduces the columns to only important columns
-        df_RBG_screen = df_RBG_screen[["PtID", "Gender"]]
-
-        # reads dataframe with age data
-        df_RBG_age = smart_read("datasets for T1D/REPLACEBG/Data Tables/HPtRoster.txt")
-        # reduces the columns to only important columns
-        df_RBG_age = df_RBG_age[["PtID", "AgeAsOfEnrollDt"]]
-
-        # merges dataframes of sex and age data
-        df_RBG_screen = pd.merge(df_RBG_screen, df_RBG_age, on="PtID", how="inner")
-
-        # merges dataframes of demographics and CGM data 
-        df_RBG = pd.merge(df_RBG, df_RBG_screen, on=["PtID"], how="left")
-
-        # column names are renamed for semantic equality
-        df_RBG = df_RBG.rename(columns={"AgeAsOfEnrollDt" : "Age", "Gender": "Sex"})
         # adds the database name to the patient ID to enable reidentification 
         df_RBG["PtID"] = df_RBG["PtID"].astype(str) + "_RBG"
         # adds a "Database" column with the name of the Dataset to enable reidentification
@@ -627,7 +586,7 @@ def read_data(read_all = True):
         df_SENCE = pd.merge(df_SENCE, df_SENCE_screen, on=["PtID"], how="left")
 
         # column names are renamed for semantic equality
-        df_SENCE = df_SENCE.rename(columns={"Value": "GlucoseCGM", "AgeAsOfEnrollDt" : "Age", "HbA1cTestRes": "Hba1c", "Gender": "Sex"})
+        df_SENCE = df_SENCE.rename(columns={"Value": "GlucoseCGM", "AgeAsOfEnrollDt" : "Age", "Gender": "Sex"})
         # adds the database name to the patient ID to enable reidentification 
         df_SENCE["PtID"] = df_SENCE["PtID"].astype(str) + "_SENCE"
         # adds a "Database" column with the name of the Dataset to enable reidentification
@@ -747,8 +706,8 @@ def read_data(read_all = True):
         # converts timstamps to datetime
         df_shang["ts"] = pd.to_datetime(df_shang["Date"])
         # undersamples to 5 minute intervals to have unifrom sample rate; this is done for each subject seperately
-        df_shang  = df_shang.groupby("PtID", group_keys=False).apply(lambda x: df_resample(x, timestamp = "ts", frequency= "5min", mode="glucose", fillid = "PtID", value = "CGM (mg / dl)"))                                                                                   
-        
+        df_shang = df_shang.groupby("PtID", group_keys=False).apply(lambda x: fill_gaps_sampling(x, "ts", "PtID", "CGM (mg / dl)"))
+      
         # reads the dataframe with demographic data
         df_shang_info = smart_read("datasets for T1D/shanghai/Shanghai_T1DM_Summary.xlsx")
         # column names are renamed for semantic equality
@@ -885,8 +844,8 @@ def read_data(read_all = True):
             )
         ).reset_index(drop=True)
         # undersamples abbott data to 5 minute intervals to have unifrom sample rate; this is done for each subject seperately
-        df_DDATSHR_glc  = df_DDATSHR_glc.groupby("Subject code number", group_keys=False).apply(lambda x: df_resample(x, timestamp = "ts", frequency= "5min", mode="glucose", fillid = "Subject code number", value = "Historic Glucose [mmol/l]"))                                                                                   
-        
+        df_DDATSHR_glc = df_DDATSHR_glc.groupby("Subject code number", group_keys=False).apply(lambda x: fill_gaps_sampling(x, "ts", "Subject code number", "Historic Glucose [mmol/l]"))
+
         # removes all other timestamps which were used for insulin but have no glucose entry
         df_DDATSHR_ins = df_DDATSHR_ins.dropna(subset=["Sensor Glucose [mmol/l]"])
        
@@ -958,8 +917,21 @@ def read_data(read_all = True):
         # detects the sample rate since some subjects have glucose collected in 10 minute intervals; this is done separately for each subject
         fre_rtc = df_rtc.groupby("PtID", group_keys=False).apply(lambda x: detect_sample_rate(x, time_col = "ts")).reset_index(name="Frequency")
         # adds teh frequency column to the dataframe with CGM measurements
-        df_RTC = df_rtc.merge(fre_rtc, on="PtID", how="left")
+        df_rtc = df_rtc.merge(fre_rtc, on="PtID", how="left")
 
+        # fills missing values with the feedforward method in the "Frequency" column
+        df_rtc["Frequency"] = df_rtc["Frequency"].fillna(method="ffill")
+
+        # assigns condition of 10 minutes to resample those seperately
+        condition = df_rtc["Frequency"] == "10 min"
+        # splits the dataframe based on the condition
+        df_10min = df_rtc[condition]   
+        df_5min = df_rtc[~condition] 
+
+        # undersamples CGM values with 10 minute measurement frequency to 5 minute intervals to have unifrom sample rate; this is done for each subject seperately
+        df_10min = df_10min.groupby("PtID", group_keys=False).apply(lambda x: fill_gaps_sampling(x, "ts", "PtID", "Glucose", 10))
+        # concatenates both dataframes with separate frequencies again into one database
+        df_RTC = pd.concat([df_10min, df_5min], ignore_index=True)
         # resamples the whole dataframe to 5 minute intervals to have unifrom sample rate; this is done for each subject seperately
         df_RTC = df_RTC.groupby("PtID", group_keys=False).apply(lambda x: df_resample(x, timestamp = "ts", frequency= "5min", mode="glucose", fillid = "PtID", value = "Glucose"))
 
@@ -1027,112 +999,3 @@ def read_data(read_all = True):
     combined_df_list = try_call_functions(datasets)
     # returns a list of dataframes
     return combined_df_list
-
-
-
-def combine_data(modus, restricted_list, columns_to_check = ["Age", "Sex"]):
-    """
-    This function integrates all dataframes into one database depending on the defined modus 
-    Parameters:
-    - modus: can be either 1, 2, or 3. 
-        - 1 is for the main database and integrates all dataframes which include CGM values
-        - 2 is for subdatabase I and integrates all dataframes which include CGM values and demographics of age and sex
-        - 3 is for subdatabase II and integrates all dataframes which include CGM values and HR data
-    - retricted_list is the list of datasets which were not shared due to licensing restrictions. These need to be loaded and integrated seperately
-    - columns_to_check are default values to set age groups if modus two is applied
-    Output: returns the integrated subset of restricted data 
-    """
-    # this function takes the original database as input and converts the value of the "Age" column into integers
-    def set_ages(df, column = "Age"):
-        
-        # converts each string to a numeric value
-        def to_numeric(val):
-            if isinstance(val, str) and "-" in val:
-                # removes any extra words after the age range
-                val = val.replace("yrs", "")  
-                val = val.strip()  
-                # cleans up any extra spaces
-                start, end = map(int, val.replace(" ", "").split("-"))
-                # or start, or end
-                return (start + end) / 2  
-            # returns the numeric value
-            return int(val)
-
-        # defines the set of all ages 
-        all_ages = set(df[column])
-
-        # initializes one empty lists for the ages reported as strings
-        Age_str = []
-
-        # iterates over the set of reported ages
-        for value in all_ages:
-            # appends each age reported as an age range as a string to the list
-            if isinstance(value, str) or isinstance(value, object):
-                Age_str.append(str(value)) 
-
-        # copies the original database
-        df = df.copy()
-        # converts each age range into a numeric value
-        df["Age_num"] = df[column].apply(to_numeric)
-
-        # creates age groups based on defined bins
-        bins = [0, 2,6, 10, 13, 17,25, 35, 55, 100]
-        labels = ["0-2", "3-6", "7-10", "11-13", "14-17", "18-25", "26-35", "36-55", "56+"]
-        
-        # categorizes the ages of the "Age" colum into the defined age groups and assign them to new column "AgeGroup"
-        df["AgeGroup"] = pd.cut(df["Age_num"], bins=bins, labels=labels, right=True)
-        df = df.drop("Age_num", axis=1)
-        # returns the dataframe with the new colum "AgeGroup"
-        return df
-
-    # this function concatenates the dataframes 
-    def concat_rows_on_columns(dfs, columns):
-    
-        # selects only the specified columns from each dataframe
-        dfs = [df[columns] for df in dfs]
-        # concatenates all dataframes vertically 
-        result = pd.concat(dfs, ignore_index=True)
-        # removes subjects who only includes nan values in the "GlucoseCGM" column
-        subjects_to_keep = result.groupby("PtID")["GlucoseCGM"].transform(lambda x: not x.isna().all())
-        # only includes subjects with columns
-        result = result[subjects_to_keep]
-
-        # if columns to check are all within the dataframe columns 
-        if all(col in result.columns for col in columns_to_check):
-            # removes nan values since the final datasets should have all columns included for each subject
-            df_cleaned = result.dropna(subset=columns_to_check)
-            # groups ages into age ranges 
-            df_cleaned = set_ages(df_cleaned)
-            # returns the cleaned and preprocessed dataset
-            return df_cleaned
-        else:
-            # returns the cleaned and preprocessed dataset
-            return result
-
-    # either 1: all CGM values, 2: CGM and demographics, or 3: CGM and HR
-    allowed_values = [1, 2, 3] 
-    # for a wrong input, output a warning. 
-    if modus not in allowed_values:
-        print("Invalid input. Please enter: 1, 2, 3 (1: all CGM values, 2: CGM and demographics, or 3: CGM and HR).")
-        return
-    # based on the modus, the columns to keep are specified
-    if modus == 1: 
-        columns_to_keep = ["ts", "PtID", "GlucoseCGM", "Database"]
-    elif modus == 2:
-        columns_to_keep = ["ts", "PtID", "GlucoseCGM", "Age", "Sex", "Database"] 
-    else:
-        columns_to_keep = ["ts", "PtID", "GlucoseCGM", "HR", "Database"]
-    
-    # takes only the subset of columns of interest
-    filtered_dfs = [df for df in restricted_list if all(col in df.columns for col in columns_to_keep)]
-    # calls the "concat_rows_on_columns()"" function
-    combined_df = concat_rows_on_columns(filtered_dfs, columns=columns_to_keep)
-
-    # sorts the timestamps per subject 
-    df_sorted = combined_df.sort_values(["PtID", "ts"])
-
-    # drops duplicate based on 'PtID' and 'ts', keeping the first occurrence
-    df_all = df_sorted.drop_duplicates(subset=["PtID", "ts"], keep="first")
-
-    # returns the combined_df
-    return df_all

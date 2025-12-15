@@ -1,10 +1,12 @@
 # imports
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.model_selection import train_test_split
 import numpy as np 
 import datetime
 import polars as pl
+from imblearn.under_sampling import RandomUnderSampler
+from collections import Counter
+
+#---------------- Functions to preprocess data, assing classes, and create time series sequences ----------------#
 
 
 def remove_outliers(df_org, value, modus, subject = "PtID"):
@@ -32,11 +34,9 @@ def remove_outliers(df_org, value, modus, subject = "PtID"):
     if modus == "glucose":
       # identifies outliers which are not in the range of 25 and 75 percent of values and replaces them with nan values
       # also removes CGM values which are less than 40 mg/dL
-      is_outlier = (data[value] < lower) | (data[value] > upper) | (data[value] < 40) | (data[value] > 500) # maybe also larger than 500
+      is_outlier = (data[value] < lower) | (data[value] > upper) | (data[value] < 40) | (data[value] > 500) 
     elif modus == "vitals":
-      # identifies outliers which are not in the range of 25 and 75 percent of values and replaces them with nan values
-      # also removes CGM values which are less than 40 mg/dL
-      is_outlier = (data[value] < lower) | (data[value] > upper) | (data[value] < 30) # maybe also larger than 500
+      is_outlier = (data[value] < lower) | (data[value] > upper) | (data[value] < 30) 
     else:
       print("modus must be glucose or vitals")
 
@@ -76,7 +76,7 @@ def gap_limited_interpolation(df_filtered, limit=6):
 def slopes(x, y):
     """
     Estimate the derivative y'(x) using a parabolic fit through three consecutive points.
-    
+
     This method approximates slopes based on local parabolas and is numerically robust 
     for functions where abscissae (x) and ordinates (y) may differ in scale or units.
 
@@ -217,18 +217,25 @@ def interpolate_stineman_group(df_org, timestamp, value, llimit=6, ulimit=24, yp
     y_known = val[~is_nan]
     x_interp = tf[mask]
 
+
     if x_interp.size > 0:
-        y_interp = stineman_interp(x_interp, x_known, y_known)
-        val.iloc[mask] = y_interp
+            y_interp = stineman_interp(x_interp, x_known, y_known)
+            # we dont want unreasonable values
+            if value == "GlucoseCGM":
+                y_interp = np.where((y_interp >= 40) & (y_interp <= 500), y_interp, np.nan)
+            elif value == "HR":
+                y_interp = np.where((y_interp >= 30) & (y_interp <= 200), y_interp, np.nan)
+            val.iloc[mask] = y_interp
 
     # rounds the output 
-    group['value_interp'] = val.round(2)  
+    group["value_interp"] = val.round(2)  
 
     # drops original columns
     group.drop(columns=[value], inplace=True)
 
     # renames the interpolated column
-    group.rename(columns={'value_interp': value}, inplace=True)
+    group.rename(columns={"value_interp": value}, inplace=True)
+
 
     # returns the interpolated column
     return group
@@ -321,83 +328,78 @@ def extract_valid_windows_GLC(
     - min_window_duration is the allowed continuous time of a time series
     Output: It returns a list including six separate list for X_train, X_val, X_test, Y_train, Y_val, and Y_test
    """ 
-    # X_train, X_val, X_test, Y_train, Y_val, and Y_test are initialized as empty arrays
+    # X_train, and Y_train are initialized as empty arrays
     X_train = []
     Y_train = []
 
-    X_test = []
-    Y_test = []
-
-    X_val = []
-    Y_val = []
-
-    # dataframe is converted to polars for increased efficiency
+    # converts pandas DataFrame to polars for faster execution
     df = pl.from_pandas(df_org)
-    # ensures datetime type and sort
+    # sorts by timestamp to ensure chronological order
     df = df.sort(timestamp_col)
 
+    # extracts timestamps and total row count
     timestamps = df[timestamp_col].to_numpy()
     n_rows = df.height
 
-    # empty arrays are initialized for the windows and labels
+    # initializes empty lists for feature windows and labels
     windows = []
     labels = []
 
+    # sets starting index for window generation
     start_idx = 0
 
+    # iterates over all rows to construct valid windows
     for end_idx in range(n_rows):
+        # moves start index if window exceeds allowed duration
         while timestamps[end_idx] - timestamps[start_idx] > min_window_duration:
             start_idx += 1
 
+        # calculates number of samples in current window
         count = end_idx - start_idx + 1
 
+        # checks if window meets required duration and sample count
         if (
             timestamps[end_idx] - timestamps[start_idx] >= min_window_duration and
             count == expected_sample_count
         ):
+            # extracts current time window
             window_df = df.slice(start_idx, count)
 
+            # skips window if missing values are present
             nulls = window_df.null_count().row(0)
             if all(count == 0 for count in nulls):
-                # gets label of last point in window
-                label = window_df[class_col].to_list()[-1]  
-                # only allows classes 0–4
-                if label in {0, 1, 2, 3, 4}:  
-                    windows.append(window_df[feature_col].to_list()) 
+                # retrieves label from last row in window
+                label = window_df[class_col].to_list()[-1]
+                # allows only classes 0–4
+                if label in {0, 1, 2, 3, 4}:
+                    # stores feature sequence and label
+                    windows.append(window_df[feature_col].to_list())
                     labels.append(label)
 
-
+    # checks if any valid windows were found
     if len(windows) > 0:
-        windows = np.array(windows).reshape(-1, 1) 
+        # converts to numpy arrays
+        windows = np.array(windows).reshape(-1, 1)
         labels = np.array(labels).reshape(-1, 1)
 
+        # reshapes data for model input
         X_data = windows.reshape(-1, expected_sample_count, 1)
         Y_data = labels.reshape(-1, 1)
 
-        # sequential split: train → val → test
-        X_temp, X_test_subject, Y_temp, Y_test_subject = train_test_split(
-            X_data, Y_data, test_size=0.15, shuffle=False
-        )
-        X_train_subject, X_val_subject, Y_train_subject, Y_val_subject = train_test_split(
-            X_temp, Y_temp, test_size=0.1765, shuffle=False
-        )
+        # appends subject data to training sets
+        X_train.append(X_data)
+        Y_train.append(Y_data)
 
-        X_train.append(X_train_subject)
-        Y_train.append(Y_train_subject)
-
-        X_val.append(X_val_subject)
-        Y_val.append(Y_val_subject)
-
-        X_test.append(X_test_subject)
-        Y_test.append(Y_test_subject)
-    
-        return X_train, X_val, X_test, Y_train, Y_val, Y_test
+        # returns feature and label arrays
+        return X_train, Y_train
     else:
-        return 
-    
+        # returns nothing if no valid window exists
+        return
+
+
+
 
 # generates time series with a sliding window appraoch of 2 hour lengths for subdatabase II
-# splits data into train, validation, and test
 def extract_valid_windows_GLC_HR(
     df_org: pd.DataFrame,
     timestamp_col: str = "ts",
@@ -423,75 +425,84 @@ def extract_valid_windows_GLC_HR(
     X_train = []
     Y_train = []
 
-    X_test = []
-    Y_test = []
-
-    X_val = []
-    Y_val = []
-
+    # converts pandas DataFrame to polars for performance
     df = pl.from_pandas(df_org)
-    # ensures datetime type and sort
+
+    # ensures timestamps are sorted chronologically
     df = df.sort(timestamp_col)
 
+    # extracts timestamps and row count
     timestamps = df[timestamp_col].to_numpy()
     n_rows = df.height
 
+    # initializes containers for time windows and labels
     windows = []
     labels = []
 
+    # sets initial window start index
     start_idx = 0
 
+    # iterates through all rows to find valid windows
     for end_idx in range(n_rows):
+        # shifts window start if duration exceeds minimum
         while timestamps[end_idx] - timestamps[start_idx] > min_window_duration:
             start_idx += 1
 
+        # calculates number of samples in current window
         count = end_idx - start_idx + 1
 
+        # checks if window duration and sample count meet requirements
         if (
             timestamps[end_idx] - timestamps[start_idx] >= min_window_duration and
             count == expected_sample_count
         ):
+            # extracts current time window
             window_df = df.slice(start_idx, count)
 
+            # checks for missing values in window
             nulls = window_df.null_count().row(0)
             if all(count == 0 for count in nulls):
-                # gets label of last point in window
-                label = window_df[class_col].to_list()[-1]  
-                # only allows classes 0–4
-                if label in {0, 1, 2, 3, 4}:  
+                # retrieves label from last row in window
+                label = window_df[class_col].to_list()[-1]
+                # only accepts classes 0–4
+                if label in {0, 1, 2, 3, 4}:
+                    # stores selected features as numpy list
                     windows.append(
                         window_df.select([feature_col, feature_col2]).to_numpy().tolist()
                     )
+                    # stores corresponding label
                     labels.append(label)
 
+    # checks if any valid windows were found
     if len(windows) > 0:
-        windows = np.array(windows).reshape(-1, 2) 
+        # converts to numpy arrays
+        windows = np.array(windows).reshape(-1, 2)
+        labels = np.array(labels).reshape(-1, 1)
+        
+        # skips subjects with insufficient data
+        if len(windows) <= 2:
+            print(f"Skipping subject since there are not enough windows")
+            return
+
+        # reshapes for model input
+        windows = np.array(windows).reshape(-1, 1)
         labels = np.array(labels).reshape(-1, 1)
 
-        X_data = windows.reshape(-1, expected_sample_count, 2)
+        # prepares data in required shape (samples × timesteps × features)
+        X_data = windows.reshape(-1, expected_sample_count, 1)
         Y_data = labels.reshape(-1, 1)
 
-        # sequential split: train → val → test
-        X_temp, X_test_subject, Y_temp, Y_test_subject = train_test_split(
-            X_data, Y_data, test_size=0.15, shuffle=False
-        )
-        X_train_subject, X_val_subject, Y_train_subject, Y_val_subject = train_test_split(
-            X_temp, Y_temp, test_size=0.1765, shuffle=False
-        )
+        # appends to training lists
+        X_train.append(X_data)
+        Y_train.append(Y_data)
 
-        X_train.append(X_train_subject)
-        Y_train.append(Y_train_subject)
-
-        X_val.append(X_val_subject)
-        Y_val.append(Y_val_subject)
-
-        X_test.append(X_test_subject)
-        Y_test.append(Y_test_subject)
-    
-        return X_train, X_val, X_test, Y_train, Y_val, Y_test
+        # returns final training data for subject
+        return X_train, Y_train
     else:
-        return 
-    
+        # returns nothing if no valid windows were found
+        return
+
+
 
 
 # flattens data 
@@ -506,13 +517,42 @@ def flatten_data(X, modus, axis_f = 1, shape_f = 25, dim = 1):
    - dim is the dimension,
     Output: It returns a the flattened array of the given list
    """ 
-    array_data = [np.array(x) for x in X]  # convert all sublists to arrays
+    # convert all sublists to arrays
+    array_data = [np.array(x) for x in X]  
     flattened_data = np.concatenate(array_data, axis=axis_f)
+    # the dimension is adjusted based on the input or output data
     if modus == "input":
         flattened_data = flattened_data.reshape(-1,shape_f,dim)
     elif modus == "output":
         flattened_data = flattened_data.reshape(-1,dim)
     else:
         print("Modus must be either input or output.")
-    print(flattened_data.shape) 
+    #print(flattened_data.shape) 
     return flattened_data
+
+
+def undersampling_1D(X, y):
+    '''This function takes the X and y values of the created time sequences and undersamples 
+    all classes to the minority class'''
+    # ensures labels are 1D
+    if y.ndim == 2 and y.shape[1] == 1:
+        y = y.ravel()
+
+    # saves original shape
+    num_samples, window_size, num_channels = X.shape
+    # flattens for resampling
+    X_reshaped = X.reshape(num_samples, -1)  
+
+    # defines undersampling strategy: equalize all classes
+    min_class_count = min(Counter(y).values())
+    sampling_strategy = {int(cls): min_class_count for cls in np.unique(y)}
+
+    # applies undersampling
+    rus = RandomUnderSampler(sampling_strategy=sampling_strategy, random_state=42)
+    X_under, y_under = rus.fit_resample(X_reshaped, y)
+
+    # reshapes X back to original 3D shape
+    X_under = X_under.reshape(-1, window_size, num_channels)
+    y_under = y_under.reshape(-1, 1)
+
+    return X_under, y_under  

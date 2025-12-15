@@ -1,0 +1,33 @@
+=== Correlation for Whole Dataset ===
+Pearson:  0.0664
+Spearman: 0.0652
+Kendall:  0.0438
+
+=== Correlation by Class ===
+
+Pearson correlation:
+Class
+0    0.125562
+1    0.200122
+2    0.287205
+3    0.233134
+4    0.169013
+5    0.083111
+
+Spearman correlation:
+Class
+0    0.117417
+1    0.195105
+2    0.300425
+3    0.266303
+4    0.204796
+5    0.084184
+
+Kendall correlation:
+Class
+0    0.078621
+1    0.134037
+2    0.206937
+3    0.183050
+4    0.139915
+5    0.056657

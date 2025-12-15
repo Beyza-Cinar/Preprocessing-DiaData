@@ -28,9 +28,14 @@ TensorFlow version 2.13.0
 The code is organized as follows:
 
 - data_integration.py: Contains data intergation steps since data is integrated again because missing values produced via undersampling are not treated with feedforward filling in this study.
+- data_integration_v1.py: Contains data intergation steps of version 1 of DiaData for the raw counterpart of the maindatabase where missing values produced via undersampling are treated with feedforward filling.
 - data_preprocessing.py: Contains the functions for preprocessing the dataset for an improved quality and the benchmarking task.
-- data_pre-processing_MDB.ipynb: Contains the code for pre-processing and model training on the maindabase of DiaData including all subjects.
-- data_pre-processing_MDB_raw.ipynb: Contains the code for pre-processing and model training on the raw maindabase of DiaData including all subjects.
-- data_cleaning_SBI.ipynb: Contains the code for data cleaning on Subdatabase I of DiaData including only subjects with available glucose values and demographics.
-- data_pre-processing_SBII.ipynb: Contains the code for pre-processing and model training on Subdatabase II of DiaData including only subjects with available glucose and heart rate data.
-- data_pre-processing_SBII_raw.ipynb: Contains the code for pre-processing and model training on th raw Subdatabase II of DiaData including only subjects with available glucose and heart rate data.
+- data_models.py: Contains the model architectures of ResNet and FCN; contains metrics.
+
+- HypoglycemiaClassifcation_MDB.ipynb: Contains the code for pre-processing and model training on the maindabase of DiaData including all subjects.
+- HypoglycemiaClassifcation_MDB_raw: Contains the code for pre-processing and model training on the raw maindabase of DiaData including all subjects.
+- Data_Cleaning_SBI.ipynb: Contains the code for data cleaning on Subdatabase I of DiaData including only subjects with available glucose values and demographics.
+- HypoglycemiaClassification_SDBII_raw: Contains the code for pre-processing and model training on Subdatabase II of DiaData including only subjects with available glucose and heart rate data.
+- HypoglycemiaClassification_SDBII_raw.ipynb: Contains the code for pre-processing and model training on th raw Subdatabase II of DiaData including only subjects with available glucose and heart rate data.
+- Data_Exploration_SDBII.ipynb: Explores differences in data between the raw and quality enhanced SDBII; contains correlation analysis between heartrate and hypoglycemic glucose values. 
+- Statistical_Significance_Test.ipynb: Contains significance tests between performance of raw and quality enhanced DiaData.
