@@ -9,6 +9,9 @@ The steps include:
 4. Data analysis involving correlation analysis on a subset of DiaData including glucose and heart rate measurements.
 5. Benchmarking on DiaData with hypoglycemia classification up to 2 hours before onset.
 
+## Reference
+The paper associated with this code is available at doi:10.1109/JBHI.2025.3620603
+
 ## Requirements
 
 python version 3.11.4
