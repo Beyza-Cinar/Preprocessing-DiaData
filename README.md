@@ -2,7 +2,7 @@
 
 This repository presents data cleaning, and pre-processing steps of DiaData, a large integrated CGM Dataset of subjects with Type 1 Diabetes presented in: https://github.com/Beyza-Cinar/DiaData. Detailed instruction on acquiring the single datasets and restricted datasets is provided in https://github.com/Beyza-Cinar/DiaData as well. 
 
-Access to a partial version of the raw and preprocessed integrated dataset "DiaData: A Multi-Modal, Integrated Time-Series Dataset for Type 1 Diabetes Research", containing 13 out of the 15 datasets is provided in [https://doi.org/10.5281/zenodo.16874128](https://zenodo.org/records/16875703), doi: 10.5281/zenodo.16874128.
+Access to a partial version of the raw and preprocessed integrated dataset "DiaData: A Multi-Modal, Integrated Time-Series Dataset for Type 1 Diabetes Research", containing 13 out of the 15 datasets is provided in [https://doi.org/10.5281/zenodo.16874128](https://zenodo.org/records/16874128), doi: 10.5281/zenodo.16874128.
 
 
 
